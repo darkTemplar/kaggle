@@ -27,7 +27,7 @@ DATES = {'YearBuilt', 'YearRemodAdd', 'GarageYrBlt', 'YrSold'}
 def test_df(df):
     # Example on how to count null values in Lot Frontage Column
     # print(df.columns)
-    print(df['Condition2'])
+    print(df['LandContour'])
     print(df['BldgType'])
     print(df['LotArea'])
     print(df['GarageCars'])
@@ -72,36 +72,43 @@ def find_droppable_columns(df):
     return dropped_columns
 
 
-def convert_to_categorical(df):
-    for column in TEXTUAL:
+def convert_to_categorical(df, columns):
+    for column in columns:
         df[column] = df[column].astype('category')
     return df
 
 
-def preprocess_data(df):
-    columns = df.columns
-    dropped_columns = find_droppable_columns(df)
-    # first convert textual columns to categorical datatype
-    df = convert_to_categorical(df)
-    # now convert those categorical data types to numeric representations
-    df[list(TEXTUAL)] = df[list(TEXTUAL)].apply(lambda x: x.cat.codes)
-    columns = df.columns
-    numeric_categorical_columns = CATEGORICAL|TEXTUAL
-    categorical_columns = list(numeric_categorical_columns - dropped_columns)
+def preprocess_data(df, dropped_columns):
+    df = df.drop(list(dropped_columns), axis=1)
+    textual_columns = list(TEXTUAL - dropped_columns)
     numeric_columns = list(NUMERIC - dropped_columns)
+    categorical_columns = list(CATEGORICAL|TEXTUAL - dropped_columns)
+    # first convert textual columns to categorical datatype
+    df = convert_to_categorical(df, textual_columns)
+    # now convert those categorical data types to numeric representations
+    df[textual_columns] = df[textual_columns].apply(lambda x: x.cat.codes)
     # scale numeric data
     min_max_scaler = preprocessing.MinMaxScaler()
     df[numeric_columns] = min_max_scaler.fit_transform(df[numeric_columns])
     # one hot encode categorical data
-    one_hot_encoder = preprocessing.OneHotEncoder()
-    df[categorical_columns] = one_hot_encoder.fit_transform(df[categorical_columns])
+    one_hot_encoder = preprocessing.OneHotEncoder(sparse=False)
+    #df[categorical_columns] = one_hot_encoder.fit_transform(df[categorical_columns])
+    # for c in categorical_columns:
+    #     print(c)
+    #     print(df[c])
+    #     df[c] = one_hot_encoder.fit_transform(df[c])
     # fixme: take care of date columns
     # fixme: take care textual categorical columns (use pandas get_dummies)
     return df
 
 if __name__ == '__main__':
+    # 1. read data from csv
     housing_df = pd.read_csv('train.csv')
+    # 2. Fill in missing values
     housing_df = fill_null_columns(housing_df)
+    # 3. Find columns which can be dropped
+    dropped_columns = find_droppable_columns(housing_df)
     #test_df(housing_df)
-    housing_df = preprocess_data(housing_df)
+    # 4. Preprocess Data
+    housing_df = preprocess_data(housing_df, dropped_columns)
     #test_df(housing_df)
