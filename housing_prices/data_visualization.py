@@ -1,8 +1,10 @@
+from collections import defaultdict
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn import preprocessing
 import data_frame_imputer as dfi
+import datetime
 
 # Always display all the columns
 pd.set_option('display.width', 5000)
@@ -27,10 +29,10 @@ DATES = {'YearBuilt', 'YearRemodAdd', 'GarageYrBlt', 'YrSold'}
 def test_df(df):
     # Example on how to count null values in Lot Frontage Column
     # print(df.columns)
-    print(df['LandContour'])
-    print(df['BldgType'])
-    print(df['LotArea'])
-    print(df['GarageCars'])
+    print(df['YearBuilt'])
+    print(df['YearRemodAdd'])
+    print(df['GarageYrBlt'])
+    print(df['YrSold'])
 
 
 def columns_with_null(df):
@@ -73,32 +75,34 @@ def find_droppable_columns(df):
 
 
 def convert_to_categorical(df, columns):
-    for column in columns:
-        df[column] = df[column].astype('category')
-    return df
+    d = defaultdict(preprocessing.LabelEncoder)
+    return df[columns].apply(lambda x: d[x.name].fit_transform(x))
+
+
+def encode_categorical_data(df, columns):
+    return pd.get_dummies(df, columns=columns)
+
+
+def encode_date_data(df, columns):
+    now = datetime.datetime.now()
+    return df[columns].apply(lambda x: now.year - x, axis=1)
 
 
 def preprocess_data(df, dropped_columns):
     df = df.drop(list(dropped_columns), axis=1)
     textual_columns = list(TEXTUAL - dropped_columns)
     numeric_columns = list(NUMERIC - dropped_columns)
-    categorical_columns = list(CATEGORICAL|TEXTUAL - dropped_columns)
-    # first convert textual columns to categorical datatype
-    df = convert_to_categorical(df, textual_columns)
-    # now convert those categorical data types to numeric representations
-    df[textual_columns] = df[textual_columns].apply(lambda x: x.cat.codes)
+    #categorical_columns = list(CATEGORICAL|TEXTUAL - dropped_columns)
+    # first convert textual columns to categorical
+    #df[textual_columns] = convert_to_categorical(df, textual_columns)
+    # one_hot_encoder = preprocessing.OneHotEncoder(sparse=False)
+    # df[categorical_columns] = one_hot_encoder.fit_transform(df[categorical_columns])
+    df = encode_categorical_data(df, textual_columns)
     # scale numeric data
     min_max_scaler = preprocessing.MinMaxScaler()
     df[numeric_columns] = min_max_scaler.fit_transform(df[numeric_columns])
-    # one hot encode categorical data
-    one_hot_encoder = preprocessing.OneHotEncoder(sparse=False)
-    #df[categorical_columns] = one_hot_encoder.fit_transform(df[categorical_columns])
-    # for c in categorical_columns:
-    #     print(c)
-    #     print(df[c])
-    #     df[c] = one_hot_encoder.fit_transform(df[c])
-    # fixme: take care of date columns
-    # fixme: take care textual categorical columns (use pandas get_dummies)
+    # take care of date columns
+    df[list(DATES)] = encode_date_data(df, list(DATES))
     return df
 
 if __name__ == '__main__':
