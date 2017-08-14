@@ -44,7 +44,7 @@ def fill_null_columns(df):
     return data_frame_imputer.fit_transform(df)
 
 
-def low_variability_column(all_counts, column, threshold=0.9):
+def low_variability_column(all_counts, column, threshold=0.8):
     """
     Figure out which columns have very low variability and can hence not be considered when selecting features
     :param all_counts:
@@ -165,8 +165,8 @@ if __name__ == '__main__':
     #print(X.shape)
     #print(y.shape)
 
-    # for kernel in ['rbf', 'linear', 'poly']:
-    #     print("running %s kernel" % kernel)
-    #     svr = get_svm(kernel)
-    #     kfold_cross_validation(X, y, svr)
-    grid_search(X, y)
+    for kernel in ['rbf', 'linear', 'poly']:
+        print("running %s kernel" % kernel)
+        svr = get_svm(kernel)
+        kfold_cross_validation(X, y, svr)
+    #grid_search(X, y)
