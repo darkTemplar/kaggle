@@ -4,7 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from sklearn import preprocessing
 from sklearn.svm import SVR
-from sklearn.model_selection import KFold
+from sklearn.model_selection import KFold, GridSearchCV
 import data_frame_imputer as dfi
 import datetime
 
@@ -89,8 +89,10 @@ def encode_date_data(df, columns):
 
 def preprocess_data(df, dropped_columns):
     df = df.drop(list(dropped_columns), axis=1)
-    textual_columns = list(TEXTUAL - dropped_columns)
-    numeric_columns = list(NUMERIC - dropped_columns)
+    # take care of date columns
+    df[list(DATES)] = encode_date_data(df, list(DATES))
+    textual_columns = list((TEXTUAL|CATEGORICAL) - dropped_columns)
+    numeric_columns = list((NUMERIC|DATES) - dropped_columns)
     #categorical_columns = list(CATEGORICAL|TEXTUAL - dropped_columns)
     # first convert textual columns to categorical
     #df[textual_columns] = convert_to_categorical(df, textual_columns)
@@ -100,8 +102,6 @@ def preprocess_data(df, dropped_columns):
     # scale numeric data
     min_max_scaler = preprocessing.MinMaxScaler()
     df[numeric_columns] = min_max_scaler.fit_transform(df[numeric_columns])
-    # take care of date columns
-    df[list(DATES)] = encode_date_data(df, list(DATES))
     return df
 
 
@@ -118,15 +118,31 @@ def kfold_cross_validation(X, y, svr, splits=5):
         print("[fold {0}] score: {1:.5f}".format(k, svr.score(X[test], y[test])))
 
 
+def grid_search(X, y):
+    C_values = [1, 10, 100, 1000, 10000]
+    gammas = [0.0001, 0.001, 0.01, 0.1]
+    param_grid = {'C': C_values, 'gamma': gammas}
+    grid_search = GridSearchCV(SVR(kernel='rbf', cache_size=500), param_grid, cv=5)
+    #param_grid = {'C': C_values}
+    #grid_search = GridSearchCV(SVR(kernel='linear', cache_size=500), param_grid, cv=5)
+    grid_search.fit(X, y)
+    print(grid_search.best_params_)
+    print(grid_search.best_score_)
+    return grid_search.best_params_
+
+
 def get_svm(kernel='linear'):
     if kernel == 'rbf':
-        svr = SVR(kernel='rbf', C=1e3, gamma=0.1)
+        svr = SVR(kernel='rbf', C=1e4, gamma=0.01, cache_size=500)
     elif kernel == 'poly':
-        svr = SVR(kernel='poly', C=1e3, degree=2)
+        svr = SVR(kernel='poly', C=1e3, degree=2, cache_size=500)
     else:
-        svr = SVR(kernel='linear', C=1e3)
+        svr = SVR(kernel='linear', C=1e3, cache_size=500)
 
     return svr
+
+def linear_regression():
+    pass
 
 if __name__ == '__main__':
     # 1. read data from csv
@@ -149,7 +165,8 @@ if __name__ == '__main__':
     #print(X.shape)
     #print(y.shape)
 
-    for kernel in ['rbf', 'linear', 'poly']:
-        print("running %s kernel" % kernel)
-        svr = get_svm(kernel)
-        kfold_cross_validation(X, y, svr)
+    # for kernel in ['rbf', 'linear', 'poly']:
+    #     print("running %s kernel" % kernel)
+    #     svr = get_svm(kernel)
+    #     kfold_cross_validation(X, y, svr)
+    grid_search(X, y)
