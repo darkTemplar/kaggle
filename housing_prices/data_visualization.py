@@ -3,6 +3,8 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn import preprocessing
+from sklearn.svm import SVR
+from sklearn.model_selection import KFold
 import data_frame_imputer as dfi
 import datetime
 
@@ -29,10 +31,7 @@ DATES = {'YearBuilt', 'YearRemodAdd', 'GarageYrBlt', 'YrSold'}
 def test_df(df):
     # Example on how to count null values in Lot Frontage Column
     # print(df.columns)
-    print(df['YearBuilt'])
-    print(df['YearRemodAdd'])
-    print(df['GarageYrBlt'])
-    print(df['YrSold'])
+    print(df.columns)
 
 
 def columns_with_null(df):
@@ -105,14 +104,52 @@ def preprocess_data(df, dropped_columns):
     df[list(DATES)] = encode_date_data(df, list(DATES))
     return df
 
+
+def extract_sales_price(df):
+    prices = df['SalePrice']
+    df = df.drop(['SalePrice'], axis=1)
+    return df, prices
+
+
+def kfold_cross_validation(X, y, svr, splits=5):
+    kf = KFold(n_splits=splits)
+    for k, (train, test) in enumerate(kf.split(X, y)):
+        svr.fit(X[train], y[train])
+        print("[fold {0}] score: {1:.5f}".format(k, svr.score(X[test], y[test])))
+
+
+def get_svm(kernel='linear'):
+    if kernel == 'rbf':
+        svr = SVR(kernel='rbf', C=1e3, gamma=0.1)
+    elif kernel == 'poly':
+        svr = SVR(kernel='poly', C=1e3, degree=2)
+    else:
+        svr = SVR(kernel='linear', C=1e3)
+
+    return svr
+
 if __name__ == '__main__':
     # 1. read data from csv
-    housing_df = pd.read_csv('train.csv')
+    train_df = pd.read_csv('train.csv')
+    test_df = pd.read_csv('test.csv')
     # 2. Fill in missing values
-    housing_df = fill_null_columns(housing_df)
+    train_df = fill_null_columns(train_df)
+    test_df = fill_null_columns(test_df)
     # 3. Find columns which can be dropped
-    dropped_columns = find_droppable_columns(housing_df)
+    dropped_columns = find_droppable_columns(train_df)
     #test_df(housing_df)
     # 4. Preprocess Data
-    housing_df = preprocess_data(housing_df, dropped_columns)
+    train_df = preprocess_data(train_df, dropped_columns)
+    test_df = preprocess_data(test_df, dropped_columns)
     #test_df(housing_df)
+    # 5. extract sales price from the data and remove it from dataframe
+    train_df, prices = extract_sales_price(train_df)
+    # convert data to numpy arrays in prep for being used in learning algos
+    X, y = train_df.as_matrix(), prices.values
+    #print(X.shape)
+    #print(y.shape)
+
+    for kernel in ['rbf', 'linear', 'poly']:
+        print("running %s kernel" % kernel)
+        svr = get_svm(kernel)
+        kfold_cross_validation(X, y, svr)
