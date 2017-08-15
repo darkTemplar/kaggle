@@ -4,6 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from sklearn import preprocessing
 from sklearn.svm import SVR
+from sklearn.linear_model import LinearRegression, Ridge, RidgeCV
 from sklearn.model_selection import KFold, GridSearchCV
 import data_frame_imputer as dfi
 import datetime
@@ -111,24 +112,37 @@ def extract_sales_price(df):
     return df, prices
 
 
-def kfold_cross_validation(X, y, svr, splits=5):
+def kfold_cross_validation(X, y, model='linear', splits=5, params={}):
+    if model == 'svr':
+        model = get_svm(params.get('kernel', 'linear'))
+    elif model == 'ridge':
+        model = get_ridge_regression(params.get('alpha', 0.1))
+    else:
+        model = get_least_squares_regression()
+
     kf = KFold(n_splits=splits)
     for k, (train, test) in enumerate(kf.split(X, y)):
-        svr.fit(X[train], y[train])
-        print("[fold {0}] score: {1:.5f}".format(k, svr.score(X[test], y[test])))
+        model.fit(X[train], y[train])
+        print("[fold {0}] score: {1:.5f}".format(k, model.score(X[test], y[test])))
 
 
-def grid_search(X, y):
-    C_values = [1, 10, 100, 1000, 10000]
-    gammas = [0.0001, 0.001, 0.01, 0.1]
-    param_grid = {'C': C_values, 'gamma': gammas}
-    grid_search = GridSearchCV(SVR(kernel='rbf', cache_size=500), param_grid, cv=5)
-    #param_grid = {'C': C_values}
-    #grid_search = GridSearchCV(SVR(kernel='linear', cache_size=500), param_grid, cv=5)
-    grid_search.fit(X, y)
-    print(grid_search.best_params_)
-    print(grid_search.best_score_)
-    return grid_search.best_params_
+def grid_search(X, y, model='svr'):
+    if model == 'svr':
+        C_values = [1, 10, 100, 1000, 10000]
+        gammas = [0.0001, 0.001, 0.01, 0.1]
+        param_grid = {'C': C_values, 'gamma': gammas}
+        grid_search = GridSearchCV(SVR(kernel='rbf', cache_size=500), param_grid, cv=5)
+        #param_grid = {'C': C_values}
+        #grid_search = GridSearchCV(SVR(kernel='linear', cache_size=500), param_grid, cv=5)
+        grid_search.fit(X, y)
+        print(grid_search.best_params_)
+        print(grid_search.best_score_)
+        return grid_search.best_params_
+    elif model == 'ridge':
+        reg = RidgeCV(alphas=[0.1, 1.0, 10.0])
+        reg.fit(X, y)
+        print(reg.alpha_)
+        return reg.alpha_
 
 
 def get_svm(kernel='linear'):
@@ -141,8 +155,15 @@ def get_svm(kernel='linear'):
 
     return svr
 
-def linear_regression():
-    pass
+
+def get_least_squares_regression():
+    lr = LinearRegression()
+    return lr
+
+
+def get_ridge_regression(alpha):
+    ridge = Ridge(alpha=alpha)
+    return ridge
 
 if __name__ == '__main__':
     # 1. read data from csv
@@ -165,8 +186,5 @@ if __name__ == '__main__':
     #print(X.shape)
     #print(y.shape)
 
-    for kernel in ['rbf', 'linear', 'poly']:
-        print("running %s kernel" % kernel)
-        svr = get_svm(kernel)
-        kfold_cross_validation(X, y, svr)
-    #grid_search(X, y)
+    kfold_cross_validation(X, y, 'ridge', 5, {'alpha': 10})
+    #grid_search(X, y, 'ridge')
