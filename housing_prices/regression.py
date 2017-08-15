@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from sklearn import preprocessing
 from sklearn.svm import SVR
 from sklearn.linear_model import LinearRegression, Ridge, RidgeCV
+from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.model_selection import KFold, GridSearchCV
 import data_frame_imputer as dfi
 import datetime
@@ -112,15 +113,17 @@ def extract_sales_price(df):
     return df, prices
 
 
-def kfold_cross_validation(X, y, model='linear', splits=5, params={}):
+def kfold_cross_validation(X, y, model='linear', params={}, splits=5):
     if model == 'svr':
         model = get_svm(params.get('kernel', 'linear'))
     elif model == 'ridge':
         model = get_ridge_regression(params.get('alpha', 0.1))
+    elif model == 'gradient_boosting':
+        model = get_gradient_boosting_regression(params)
     else:
         model = get_least_squares_regression()
 
-    kf = KFold(n_splits=splits)
+    kf = KFold(n_splits=splits, shuffle=True)
     for k, (train, test) in enumerate(kf.split(X, y)):
         model.fit(X[train], y[train])
         print("[fold {0}] score: {1:.5f}".format(k, model.score(X[test], y[test])))
@@ -139,10 +142,12 @@ def grid_search(X, y, model='svr'):
         print(grid_search.best_score_)
         return grid_search.best_params_
     elif model == 'ridge':
-        reg = RidgeCV(alphas=[0.1, 1.0, 10.0])
+        reg = RidgeCV(alphas=[0.1, 1.0, 10.0, 100.0])
         reg.fit(X, y)
         print(reg.alpha_)
         return reg.alpha_
+    elif model == 'gradient_boosting':
+        return 0
 
 
 def get_svm(kernel='linear'):
@@ -165,6 +170,16 @@ def get_ridge_regression(alpha):
     ridge = Ridge(alpha=alpha)
     return ridge
 
+
+def get_gradient_boosting_regression(params):
+    #params = {'n_estimators': 500, 'max_depth': 4, 'min_samples_split': 2, 'learning_rate': 0.01, 'loss': 'ls'}
+    clf = GradientBoostingRegressor(**params)
+    return clf
+
+
+def prepare_submission_csv():
+    pass
+
 if __name__ == '__main__':
     # 1. read data from csv
     train_df = pd.read_csv('train.csv')
@@ -186,5 +201,8 @@ if __name__ == '__main__':
     #print(X.shape)
     #print(y.shape)
 
-    kfold_cross_validation(X, y, 'ridge', 5, {'alpha': 10})
+    # use the grid search to determine best params for the different regression algos
     #grid_search(X, y, 'ridge')
+    # once we have the best params we use the k fold cross validation on our training set
+    params = {'n_estimators': 500, 'max_depth': 4, 'min_samples_split': 2, 'learning_rate': 0.01, 'loss': 'ls'}
+    kfold_cross_validation(X, y, 'gradient_boosting', params)
