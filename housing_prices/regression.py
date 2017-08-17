@@ -7,6 +7,8 @@ from sklearn.svm import SVR
 from sklearn.linear_model import LinearRegression, Ridge, RidgeCV
 from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.model_selection import KFold, GridSearchCV
+from sklearn.decomposition import PCA
+from sklearn.feature_selection import SelectKBest, f_regression, mutual_info_regression
 import data_frame_imputer as dfi
 import datetime
 
@@ -46,7 +48,7 @@ def fill_null_columns(df):
     return data_frame_imputer.fit_transform(df)
 
 
-def low_variability_column(all_counts, column, threshold=0.8):
+def low_variability_column(all_counts, column, threshold=0.9):
     """
     Figure out which columns have very low variability and can hence not be considered when selecting features
     :param all_counts:
@@ -56,6 +58,13 @@ def low_variability_column(all_counts, column, threshold=0.8):
     """
     total_count = all_counts.sum()
     return (all_counts.nlargest(1).values[0]/total_count) >= threshold
+
+
+def select_regression_features(X, y, num_features=20, scoring='f'):
+    if scoring == 'mutual_info':
+        return SelectKBest(mutual_info_regression, k=num_features).fit_transform(X, y)
+    else:
+        return SelectKBest(f_regression, k=num_features).fit_transform(X, y)
 
 # fixme:remove for loop
 def find_droppable_columns(df):
@@ -90,6 +99,8 @@ def encode_date_data(df, columns):
 
 
 def preprocess_data(df, dropped_columns):
+    if not dropped_columns:
+        dropped_columns = {'Id'}
     df = df.drop(list(dropped_columns), axis=1)
     # take care of date columns
     df[list(DATES)] = encode_date_data(df, list(DATES))
@@ -111,6 +122,12 @@ def extract_sales_price(df):
     prices = df['SalePrice']
     df = df.drop(['SalePrice'], axis=1)
     return df, prices
+
+
+def get_pca(X):
+    pca = PCA(n_components=20)
+    pca.fit(X)
+    print(pca.explained_variance_ratio_)
 
 
 def kfold_cross_validation(X, y, model='linear', params={}, splits=5):
@@ -147,7 +164,16 @@ def grid_search(X, y, model='svr'):
         print(reg.alpha_)
         return reg.alpha_
     elif model == 'gradient_boosting':
-        return 0
+        max_depths = [2, 4, 6]
+        learning_rate = [0.01, 0.1]
+        #min_samples_split = [2, 3, 4, 5]
+        param_grid = {'max_depth': max_depths, 'learning_rate': learning_rate}
+        params = {'n_estimators': 500, 'min_samples_split': 2, 'loss': 'ls'}
+        grid_search = GridSearchCV(GradientBoostingRegressor(**params), param_grid, cv=5)
+        grid_search.fit(X, y)
+        print(grid_search.best_params_)
+        print(grid_search.best_score_)
+        return grid_search.best_params_
 
 
 def get_svm(kernel='linear'):
@@ -183,26 +209,32 @@ def prepare_submission_csv():
 if __name__ == '__main__':
     # 1. read data from csv
     train_df = pd.read_csv('train.csv')
-    test_df = pd.read_csv('test.csv')
+    #test_df = pd.read_csv('test.csv')
     # 2. Fill in missing values
     train_df = fill_null_columns(train_df)
-    test_df = fill_null_columns(test_df)
-    # 3. Find columns which can be dropped
-    dropped_columns = find_droppable_columns(train_df)
+    #test_df = fill_null_columns(test_df)
+    # 3. Find columns which can be dropped (AVoid this step if we are going to use feature selection tools)
+    #dropped_columns = find_droppable_columns(train_df)
     #test_df(housing_df)
     # 4. Preprocess Data
-    train_df = preprocess_data(train_df, dropped_columns)
-    test_df = preprocess_data(test_df, dropped_columns)
+    #train_df = preprocess_data(train_df, dropped_columns)
+    train_df = preprocess_data(train_df, set())
+    #test_df = preprocess_data(test_df, dropped_columns)
     #test_df(housing_df)
     # 5. extract sales price from the data and remove it from dataframe
     train_df, prices = extract_sales_price(train_df)
     # convert data to numpy arrays in prep for being used in learning algos
     X, y = train_df.as_matrix(), prices.values
-    #print(X.shape)
-    #print(y.shape)
+    print(X.shape)
+    #X = select_regression_features(X, y, 200, scoring='mutual_info')
+    X = select_regression_features(X, y, 200)
+    print("Shape of training data after feature selection")
+    print(X.shape)
+    print(y.shape)
 
     # use the grid search to determine best params for the different regression algos
-    #grid_search(X, y, 'ridge')
+    #grid_search(X, y, 'gradient_boosting')
     # once we have the best params we use the k fold cross validation on our training set
-    params = {'n_estimators': 500, 'max_depth': 4, 'min_samples_split': 2, 'learning_rate': 0.01, 'loss': 'ls'}
+    params = {'n_estimators': 500, 'max_depth': 4, 'min_samples_split': 2, 'learning_rate': 0.1, 'loss': 'ls'}
     kfold_cross_validation(X, y, 'gradient_boosting', params)
+    #get_pca(X)
